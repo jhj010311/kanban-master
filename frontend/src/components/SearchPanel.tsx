@@ -4,6 +4,7 @@ import { labelService } from '@/services/labelService';
 import type { CardSearchRequest, CardSearchResult } from '@/types/search';
 import type { Label } from '@/types/label';
 import { useModalAnimation } from '@/hooks/useModalAnimation';
+import { useAuth } from '@/context/AuthContext';
 import {
   modalOverlayClass,
   modalPanelClass,
@@ -22,11 +23,13 @@ interface SearchPanelProps {
 const PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'];
 
 export const SearchPanel: React.FC<SearchPanelProps> = ({ boardId, onClose, onCardSelect }) => {
+  const { user } = useAuth();
   const [keyword, setKeyword] = useState('');
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
   const [selectedLabelIds, setSelectedLabelIds] = useState<number[]>([]);
   const [isCompleted, setIsCompleted] = useState<boolean | undefined>(undefined);
   const [overdue, setOverdue] = useState(false);
+  const [assignedToMe, setAssignedToMe] = useState(false);
   const [results, setResults] = useState<CardSearchResult[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
   const [searching, setSearching] = useState(false);
@@ -56,6 +59,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ boardId, onClose, onCa
         labelIds: selectedLabelIds.length > 0 ? selectedLabelIds : undefined,
         isCompleted,
         overdue: overdue || undefined,
+        assignees: assignedToMe && user?.email ? [user.email] : undefined,
       };
       const data = await searchService.searchCardsInBoard(boardId, request);
       setResults(data);
@@ -88,6 +92,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ boardId, onClose, onCa
     setSelectedLabelIds([]);
     setIsCompleted(undefined);
     setOverdue(false);
+    setAssignedToMe(false);
     setResults([]);
   };
 
@@ -276,6 +281,19 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ boardId, onClose, onCa
                   type="button"
                 >
                   지연됨
+                </button>
+                <button
+                  onClick={() => setAssignedToMe(!assignedToMe)}
+                  disabled={!user}
+                  className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${
+                    assignedToMe
+                      ? 'bg-pastel-purple-200 text-pastel-purple-900 ring-1 ring-pastel-purple-300 shadow-sm'
+                      : 'bg-pastel-purple-50 text-pastel-purple-700 border border-pastel-purple-100 hover:bg-pastel-purple-100/80'
+                  } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  type="button"
+                  aria-label="나에게 할당된 카드만 보기"
+                >
+                  나에게 할당됨
                 </button>
               </div>
             </div>

@@ -7,21 +7,23 @@
   ],
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && ./gradlew bootRun",
-    "dev:backend:watch": "cd backend && ./gradlew classes --continuous",
+    "dev:backend": "cd backend && (if exist gradlew.bat (gradlew.bat bootRun) else (./gradlew bootRun))",
+    "dev:backend:watch": "cd backend && (if exist gradlew.bat (gradlew.bat classes --continuous) else (./gradlew classes --continuous))",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:backend:watch\" \"npm run dev:frontend\"",
     "build:frontend": "cd frontend && npm run build",
-    "build:backend": "cd backend && ./gradlew build",
+    "build:backend": "cd backend && (if exist gradlew.bat (gradlew.bat build) else (./gradlew build))",
     "build": "npm run build:backend && npm run build:frontend",
     "install:frontend": "cd frontend && npm install",
-    "install:backend": "cd backend && ./gradlew build --refresh-dependencies",
-    "clean": "rm -rf frontend/node_modules frontend/dist backend/build backend/.gradle",
-    "sonar:backend": "cd backend && ./gradlew sonar",
+    "install:backend": "cd backend && (if exist gradlew.bat (gradlew.bat build --refresh-dependencies) else (./gradlew build --refresh-dependencies))",
+    "clean": "rimraf frontend/node_modules frontend/dist backend/build backend/.gradle",
+    "sonar:backend": "cd backend && (if exist gradlew.bat (gradlew.bat sonar) else (./gradlew sonar))",
     "sonar:frontend": "cd frontend && npm run sonar",
     "sonar": "npm run sonar:backend && npm run sonar:frontend"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "rimraf": "^5.0.5",
+    "cross-env": "^7.0.3"
   },
   "engines": {
     "node": ">=18.0.0",

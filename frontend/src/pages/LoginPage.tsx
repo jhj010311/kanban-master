@@ -1,11 +1,13 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState, useEffect } from 'react';
 import { isAxiosError } from 'axios';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import GoogleLoginButton from '@/components/auth/GoogleLoginButton';
 
 const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   // 로그인 후 항상 대시보드로 리다이렉트 (보안: 이전 사용자의 URL 접근 방지)
   const redirectTo = '/';
 
@@ -13,6 +15,16 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // OAuth 에러 처리
+  useEffect(() => {
+    const oauthError = searchParams.get('error');
+    const oauthMessage = searchParams.get('message');
+
+    if (oauthError === 'oauth_failed') {
+      setError(oauthMessage || 'Google 로그인에 실패했습니다. 다시 시도해주세요.');
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -110,6 +122,21 @@ const LoginPage = () => {
               {submitting ? '로그인 중...' : '로그인'}
             </button>
           </form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-pastel-blue-200"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white/70 text-pastel-blue-600">또는</span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <GoogleLoginButton />
+            </div>
+          </div>
 
           <div className="mt-6 text-center">
             <p className="text-pastel-blue-600">

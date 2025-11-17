@@ -10,6 +10,7 @@ import { SignupPage } from '@/pages/SignupPage';
 import BoardsPage from '@/pages/BoardsPage';
 import BoardDetailPage from '@/pages/BoardDetailPage';
 import ProfilePage from '@/pages/ProfilePage';
+import OAuthRedirectPage from '@/pages/OAuthRedirectPage';
 import { GlobalNavBar } from '@/components/GlobalNavBar';
 import { Footer } from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
@@ -42,6 +43,7 @@ const App = () => {
     <Fragment>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/oauth2/redirect" element={<OAuthRedirectPage />} />
       <Route
         path="/"
         element={(

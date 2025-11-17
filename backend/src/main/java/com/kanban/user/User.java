@@ -27,7 +27,7 @@ public class User extends BaseEntity {
     private String email;
 
     @JsonIgnore
-    @Column(nullable = false)
+    @Column(nullable = true)  // OAuth 사용자는 비밀번호가 없을 수 있음
     private String password;
 
     @Column(nullable = false, length = 100)
@@ -39,6 +39,14 @@ public class User extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserStatus status;
+
+    /**
+     * 최초 가입 경로 (LOCAL, GOOGLE 등)
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "primary_provider", nullable = false, length = 20)
+    @Builder.Default
+    private com.kanban.auth.AuthProvider primaryProvider = com.kanban.auth.AuthProvider.LOCAL;
 
     private LocalDateTime lastLoginAt;
 }

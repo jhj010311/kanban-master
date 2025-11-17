@@ -12,68 +12,58 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
   updateAvatar: (avatarUrl: string) => void;
   removeAvatar: () => void;
+  setToken: (token: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // 페이지 로드 시 localStorage에서 토큰이 있는지 즉시 확인
-  const initialToken = authStorage.getToken();
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(!!initialToken); // 토큰이 있으면 로딩 상태로 시작
-  const [bootstrapped, setBootstrapped] = useState(!initialToken); // 토큰이 없으면 이미 bootstrapped
 
-  // Storage 변화 감지하여 자동으로 bootstrap
+  // 페이지 새로고침 시에만 사용자 프로필 로드 (lazy loading)
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      const token = authStorage.getToken();
+      if (!token || user) {
+        // 토큰이 없거나 이미 user가 로드된 경우 스킵
+        return;
+      }
+
+      try {
+        console.debug('[AuthContext] Loading user profile in background...');
+        const profile = await authService.fetchProfile();
+        console.debug('[AuthContext] Profile loaded successfully:', profile.email);
+        setUser(profile);
+      } catch (error) {
+        // 401 에러는 axios interceptor에서 처리 (토큰 갱신 시도 → 실패 시 로그아웃)
+        // 500 에러 등은 무시 (사용자 정보 없이도 앱 사용 가능, 다음 API 호출에서 재시도)
+        console.error('[AuthContext] Failed to load user profile (continuing without user info):', error);
+      }
+    };
+
+    void loadUserProfile();
+  }, []); // 최초 마운트 시 1회만 실행
+
+  // Storage 변화 감지 (다른 탭에서 로그인/로그아웃 시)
   useEffect(() => {
     const handleStorageChange = () => {
       const token = authStorage.getToken();
       console.debug('[AuthContext] Storage changed. Token exists:', !!token);
-      if (token && !user) {
-        // 토큰이 새로 저장되었는데 user가 없으면 profile fetch
-        setBootstrapped(false);
+
+      if (!token) {
+        // 토큰이 삭제되면 user도 초기화
+        setUser(null);
+      } else if (!user) {
+        // 토큰이 새로 생성되었는데 user가 없으면 profile 로드
+        authService.fetchProfile()
+          .then(profile => setUser(profile))
+          .catch(err => console.error('[AuthContext] Failed to load profile after storage change:', err));
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [user]);
-
-  // Bootstrap: 초기 로드 또는 토큰이 복구되었을 때
-  useEffect(() => {
-    const bootstrap = async () => {
-      if (bootstrapped) {
-        console.debug('[AuthContext] Already bootstrapped, skipping');
-        return;
-      }
-
-      const token = authStorage.getToken();
-      console.debug('[AuthContext] Bootstrap started. Token exists:', !!token);
-
-      if (!token) {
-        console.debug('[AuthContext] No token found, skipping profile fetch');
-        setLoading(false);
-        setBootstrapped(true);
-        return;
-      }
-
-      try {
-        console.debug('[AuthContext] Fetching user profile with token:', token.substring(0, 20) + '...');
-        const profile = await authService.fetchProfile();
-        console.debug('[AuthContext] Profile fetched successfully:', profile.email);
-        setUser(profile);
-        setBootstrapped(true);
-      } catch (error) {
-        // axios interceptor will handle 401 errors via /auth/refresh
-        // If refresh fails, interceptor will clear token and redirect to login
-        console.error('[AuthContext] Failed to fetch profile:', error);
-        setBootstrapped(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void bootstrap();
-  }, [bootstrapped]);
 
   const login = useCallback(async (payload: LoginRequest) => {
     console.log('🔑 [AuthContext.login] Starting login...');
@@ -96,8 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       authStorage.clearToken();
       console.log('✔️ [AuthContext.logout] Token cleared. Token in storage:', authStorage.getToken());
       setUser(null);
-      setBootstrapped(false);
-      console.log('✔️ [AuthContext.logout] User cleared and bootstrap reset');
+      console.log('✔️ [AuthContext.logout] User cleared');
     }
   }, []);
 
@@ -114,16 +103,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(prev => prev ? { ...prev, avatarUrl: null } : null);
   }, []);
 
+  const setToken = useCallback(async (token: string) => {
+    console.log('🔑 [AuthContext.setToken] Setting token from OAuth2 callback');
+    authStorage.setToken(token);
+    console.log('✔️ [AuthContext.setToken] Token saved. Fetching user profile...');
+    try {
+      const profile = await authService.fetchProfile();
+      console.log('✔️ [AuthContext.setToken] Profile fetched:', profile.email);
+      setUser(profile);
+    } catch (error) {
+      console.error('❌ [AuthContext.setToken] Failed to fetch profile:', error);
+      authStorage.clearToken();
+      throw error;
+    }
+  }, []);
+
   const value = useMemo<AuthContextValue>(() => ({
     user,
-    isAuthenticated: Boolean(user),
-    loading,
+    isAuthenticated: Boolean(authStorage.getToken()), // 토큰 존재 여부로 인증 판단
+    loading: false, // Bootstrap 로딩 제거
     login,
     logout,
     refreshProfile,
     updateAvatar,
     removeAvatar,
-  }), [user, loading, login, logout, refreshProfile, updateAvatar, removeAvatar]);
+    setToken,
+  }), [user, login, logout, refreshProfile, updateAvatar, removeAvatar, setToken]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

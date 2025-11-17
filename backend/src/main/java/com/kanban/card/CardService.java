@@ -6,10 +6,13 @@ import com.kanban.activity.ActivityScopeType;
 import com.kanban.board.member.BoardMemberRole;
 import com.kanban.board.member.BoardMemberRoleValidator;
 import com.kanban.card.dto.CardResponse;
+import com.kanban.card.dto.ChildCardSummaryDTO;
 import com.kanban.card.dto.CreateCardRequest;
+import com.kanban.card.dto.ParentCardSummaryDTO;
 import com.kanban.card.dto.UpdateCardRequest;
 import com.kanban.column.BoardColumn;
 import com.kanban.column.ColumnRepository;
+import com.kanban.exception.CardHasChildrenException;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.label.CardLabel;
 import com.kanban.label.CardLabelRepository;
@@ -18,7 +21,9 @@ import com.kanban.user.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.owasp.html.PolicyFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -42,6 +47,7 @@ public class CardService {
 
     /**
      * 특정 칼럼의 모든 카드 조회
+     * Spec § 5. 기능 요구사항 - FR-06g: 자식 개수 표시
      */
     public List<CardResponse> getCardsByColumn(Long columnId) {
         List<Card> cards = cardRepository.findByColumnIdOrderByPosition(columnId);
@@ -53,8 +59,21 @@ public class CardService {
                 .map(Card::getId)
                 .toList());
 
+        // 자식 카드 개수 조회 (FR-06g)
+        Map<Long, Integer> childCountByCardId = getChildCountByCardIds(cards.stream()
+                .map(Card::getId)
+                .toList());
+
         return cards.stream()
-                .map(card -> enrichWithAssigneeAvatar(CardResponse.from(card, labelsByCardId.getOrDefault(card.getId(), List.of()))))
+                .map(card -> {
+                    CardResponse response = CardResponse.from(card, labelsByCardId.getOrDefault(card.getId(), List.of()));
+                    // 자식 카드가 있으면 빈 리스트 설정 (개수만 필요)
+                    int childCount = childCountByCardId.getOrDefault(card.getId(), 0);
+                    if (childCount > 0) {
+                        response.setChildCards(List.of());  // 프론트엔드에서 childCards != null로 자식 존재 여부 판단
+                    }
+                    return enrichWithAssigneeAvatar(response);
+                })
                 .toList();
     }
 
@@ -73,6 +92,46 @@ public class CardService {
     }
 
     /**
+     * 특정 카드 조회 (계층 정보 포함)
+     * Spec § 6. 백엔드 규격 - FR-06b, FR-06d: 부모/자식 카드 정보 조회
+     * 결정 사항 1: 자식 카드는 생성일 오름차순 정렬
+     * 결정 사항 4: 초기 20개 자식 카드만 로드, 더보기 버튼으로 추가 로드
+     */
+    public CardResponse getCardWithHierarchy(Long columnId, Long cardId) {
+        // 카드 조회 (부모 정보 포함)
+        Card card = cardRepository.findByIdWithParent(cardId)
+                .orElseThrow(() -> new ResourceNotFoundException("Card not found"));
+
+        // 칼럼 검증
+        if (!card.getColumn().getId().equals(columnId)) {
+            throw new ResourceNotFoundException("Card not found");
+        }
+
+        // 라벨 조회
+        List<LabelResponse> labels = cardLabelRepository.findByCardId(cardId)
+                .stream()
+                .map(cardLabel -> LabelResponse.from(cardLabel.getLabel()))
+                .toList();
+
+        // 부모 카드 정보 (있는 경우)
+        ParentCardSummaryDTO parentCard = null;
+        if (card.getParentCard() != null) {
+            parentCard = ParentCardSummaryDTO.from(card.getParentCard());
+        }
+
+        // 자식 카드 목록 (최대 20개, 생성일 오름차순)
+        List<Card> childCardEntities = cardRepository.findByParentCardIdOrderByCreatedAt(cardId);
+        List<ChildCardSummaryDTO> childCards = childCardEntities.stream()
+                .limit(20)  // 초기 20개만 로드
+                .map(ChildCardSummaryDTO::from)
+                .toList();
+
+        return enrichWithAssigneeAvatar(
+                CardResponse.from(card, labels, parentCard, childCards)
+        );
+    }
+
+    /**
      * 카드 생성 (권한 검증 포함)
      */
     public CardResponse createCardWithValidation(Long boardId, Long columnId, CreateCardRequest request, Long userId) {
@@ -84,10 +143,34 @@ public class CardService {
 
     /**
      * 카드 생성 (권한 검증 없음 - 내부 사용)
+     * Spec § 5. 기능 요구사항 - FR-06j: 계층 제한 검증
      */
     public CardResponse createCard(Long columnId, CreateCardRequest request, Long userId) {
         BoardColumn column = columnRepository.findById(columnId)
                 .orElseThrow(() -> new ResourceNotFoundException("Column not found"));
+
+        // 부모 카드 검증 (FR-06j: 1단계 계층 구조만 지원)
+        Card parentCard = null;
+        if (request.getParentCardId() != null) {
+            parentCard = cardRepository.findById(request.getParentCardId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent card not found"));
+
+            // 부모 카드가 이미 자식 카드인 경우 (손자 카드 생성 방지)
+            if (parentCard.getParentCard() != null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "1단계 계층 구조만 지원합니다. 손자 카드는 생성할 수 없습니다."
+                );
+            }
+
+            // 부모 카드와 자식 카드가 같은 보드에 속하는지 검증
+            if (!parentCard.getColumn().getBoard().getId().equals(column.getBoard().getId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "부모 카드와 자식 카드는 같은 보드에 속해야 합니다."
+                );
+            }
+        }
 
         // 현재 칼럼의 카드 개수를 조회하여 position 설정
         int nextPosition = cardRepository.countByColumnId(columnId);
@@ -101,17 +184,22 @@ public class CardService {
                 .priority(request.getPriority())
                 .assignee(request.getAssignee())
                 .dueDate(request.getDueDate())
+                .parentCard(parentCard)
                 .build();
 
         Card savedCard = cardRepository.save(card);
 
         // 활동 기록
+        String activityMessage = "\"" + savedCard.getTitle() + "\" 카드가 생성되었습니다";
+        if (parentCard != null) {
+            activityMessage += " (부모: \"" + parentCard.getTitle() + "\")";
+        }
         activityService.recordActivity(
             ActivityScopeType.CARD,
             savedCard.getId(),
             ActivityEventType.CARD_CREATED,
             userId,
-            "\"" + savedCard.getTitle() + "\" 카드가 생성되었습니다"
+            activityMessage
         );
 
         return enrichWithAssigneeAvatar(CardResponse.from(savedCard));
@@ -129,6 +217,7 @@ public class CardService {
 
     /**
      * 카드 수정 (활동 기록 포함, 권한 검증 없음 - 내부 사용)
+     * Spec § 5. 기능 요구사항 - FR-06i: 컬럼 이동 시 부모 관계 해제
      */
     public CardResponse updateCard(Long columnId, Long cardId, UpdateCardRequest request, Long userId) {
         Card card = cardRepository.findByIdAndColumnId(cardId, columnId)
@@ -136,6 +225,7 @@ public class CardService {
 
         String originalTitle = card.getTitle();
         boolean isMoved = false;
+        boolean parentRelationRemoved = false;
 
         if (request.getTitle() != null) {
             card.setTitle(request.getTitle());
@@ -163,6 +253,12 @@ public class CardService {
         if (request.getColumnId() != null && !request.getColumnId().equals(columnId)) {
             BoardColumn newColumn = columnRepository.findById(request.getColumnId())
                     .orElseThrow(() -> new ResourceNotFoundException("Target column not found"));
+
+            // FR-06i: 자식 카드가 다른 컬럼으로 이동 시 부모 관계 해제
+            if (card.getParentCard() != null) {
+                card.setParentCard(null);
+                parentRelationRemoved = true;
+            }
 
             // 기존 컬럼에서 position 업데이트
             cardRepository.updatePositionsFrom(columnId, card.getPosition() + 1, -1);
@@ -192,12 +288,16 @@ public class CardService {
 
         // 활동 기록
         if (isMoved) {
+            String moveMessage = "\"" + originalTitle + "\" 카드가 이동되었습니다";
+            if (parentRelationRemoved) {
+                moveMessage += " (부모 관계 해제됨)";
+            }
             activityService.recordActivity(
                 ActivityScopeType.CARD,
                 cardId,
                 ActivityEventType.CARD_MOVED,
                 userId,
-                "\"" + originalTitle + "\" 카드가 이동되었습니다"
+                moveMessage
             );
         } else {
             activityService.recordActivity(
@@ -224,10 +324,19 @@ public class CardService {
 
     /**
      * 카드 삭제 (권한 검증 없음 - 내부 사용)
+     * Spec § 7. 보안 처리 - 데이터 무결성
+     * FR-06h 변경: 부모 카드 삭제 차단
+     * 결정 사항 2: 자식이 있으면 부모 삭제 차단
      */
     public void deleteCard(Long columnId, Long cardId, Long userId) {
         Card card = cardRepository.findByIdAndColumnId(cardId, columnId)
                 .orElseThrow(() -> new ResourceNotFoundException("Card not found"));
+
+        // 자식 카드 존재 여부 확인 (FR-06h: 부모 카드 삭제 차단)
+        int childCount = cardRepository.countByParentCardId(cardId);
+        if (childCount > 0) {
+            throw new CardHasChildrenException(childCount);
+        }
 
         String cardTitle = card.getTitle();
         int deletedPosition = card.getPosition();
@@ -281,6 +390,22 @@ public class CardService {
                 .collect(Collectors.groupingBy(
                         cardLabel -> cardLabel.getCard().getId(),
                         Collectors.mapping(cardLabel -> LabelResponse.from(cardLabel.getLabel()), Collectors.toList())
+                ));
+    }
+
+    /**
+     * 여러 카드의 자식 개수 조회
+     * FR-06g: 자식 개수 표시를 위한 헬퍼 메서드
+     */
+    private Map<Long, Integer> getChildCountByCardIds(List<Long> cardIds) {
+        if (cardIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return cardIds.stream()
+                .collect(Collectors.toMap(
+                        cardId -> cardId,
+                        cardId -> cardRepository.countByParentCardId(cardId)
                 ));
     }
 

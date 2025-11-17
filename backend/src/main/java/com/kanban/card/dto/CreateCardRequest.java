@@ -31,4 +31,12 @@ public class CreateCardRequest {
     private String assignee;
 
     private LocalDate dueDate;
+
+    // Spec § 6. 백엔드 규격 - DTO 확장
+    // FR-06f: 하위 카드 생성 버튼
+
+    /**
+     * 부모 카드 ID (하위 카드 생성 시 사용)
+     */
+    private Long parentCardId;
 }

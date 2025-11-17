@@ -56,4 +56,9 @@ public class CardSearchRequest {
      * 지연된 카드만 조회
      */
     private Boolean overdue;
+
+    /**
+     * 부모 카드가 없는 카드만 조회 (부모 카드 선택 시 사용)
+     */
+    private Boolean parentCardIdIsNull;
 }

@@ -11,7 +11,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 사용자 관련 REST API 컨트롤러
@@ -44,7 +43,7 @@ public class UserController {
                         .email(user.getEmail())
                         .avatarUrl(user.getAvatarUrl())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
 
         return ResponseEntity.ok(responses);
     }

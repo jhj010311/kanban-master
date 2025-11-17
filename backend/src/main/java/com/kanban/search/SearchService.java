@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 검색 서비스
@@ -92,6 +91,11 @@ public class SearchService {
             predicates.add(cb.equal(card.get("isCompleted"), false));
         }
 
+        // 부모 카드가 없는 카드만 필터 (부모 카드 선택용)
+        if (request.getParentCardIdIsNull() != null && request.getParentCardIdIsNull()) {
+            predicates.add(cb.isNull(card.get("parentCard")));
+        }
+
         query.where(predicates.toArray(new Predicate[0]));
         query.orderBy(cb.desc(card.get("updatedAt")));
 
@@ -101,12 +105,12 @@ public class SearchService {
         if (request.getLabelIds() != null && !request.getLabelIds().isEmpty()) {
             cards = cards.stream()
                     .filter(c -> hasAnyLabel(c.getId(), request.getLabelIds()))
-                    .collect(Collectors.toList());
+                    .toList();
         }
 
         return cards.stream()
                 .map(this::toSearchResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -167,6 +171,11 @@ public class SearchService {
             predicates.add(cb.equal(card.get("isCompleted"), false));
         }
 
+        // 부모 카드가 없는 카드만 필터 (부모 카드 선택용)
+        if (request.getParentCardIdIsNull() != null && request.getParentCardIdIsNull()) {
+            predicates.add(cb.isNull(card.get("parentCard")));
+        }
+
         query.where(predicates.toArray(new Predicate[0]));
         query.orderBy(cb.desc(card.get("updatedAt")));
 
@@ -176,12 +185,12 @@ public class SearchService {
         if (request.getLabelIds() != null && !request.getLabelIds().isEmpty()) {
             cards = cards.stream()
                     .filter(c -> hasAnyLabel(c.getId(), request.getLabelIds()))
-                    .collect(Collectors.toList());
+                    .toList();
         }
 
         return cards.stream()
                 .map(this::toSearchResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -198,7 +207,7 @@ public class SearchService {
         List<LabelResponse> labels = cardLabelRepository.findByCardId(card.getId())
                 .stream()
                 .map(cl -> LabelResponse.from(cl.getLabel()))
-                .collect(Collectors.toList());
+                .toList();
 
         return CardSearchResponse.builder()
                 .id(card.getId())

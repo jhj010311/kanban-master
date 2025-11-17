@@ -48,4 +48,28 @@ public interface CardRepository extends JpaRepository<Card, Long> {
     @Modifying
     @Query("DELETE FROM Card c WHERE c.column.id = :columnId")
     void deleteByColumnId(@Param("columnId") Long columnId);
+
+    // Spec § 6. 백엔드 규격 - Repository 확장
+    // FR-06d, FR-06h: 자식 카드 조회 및 부모 카드 삭제 시 자식 처리
+
+    /**
+     * 특정 부모 카드의 자식 카드 목록 조회
+     * 생성일 오름차순 정렬 (결정 사항 1)
+     */
+    @Query("SELECT c FROM Card c WHERE c.parentCard.id = :parentCardId ORDER BY c.createdAt ASC")
+    List<Card> findByParentCardIdOrderByCreatedAt(@Param("parentCardId") Long parentCardId);
+
+    /**
+     * 특정 부모 카드의 자식 카드 개수 조회
+     * FR-06g: 자식 개수 표시
+     */
+    @Query("SELECT COUNT(c) FROM Card c WHERE c.parentCard.id = :parentCardId")
+    int countByParentCardId(@Param("parentCardId") Long parentCardId);
+
+    /**
+     * ID로 카드 조회 (부모 카드 정보 포함)
+     * N+1 문제 방지를 위해 LEFT JOIN FETCH 사용
+     */
+    @Query("SELECT c FROM Card c LEFT JOIN FETCH c.parentCard WHERE c.id = :cardId")
+    Optional<Card> findByIdWithParent(@Param("cardId") Long cardId);
 }

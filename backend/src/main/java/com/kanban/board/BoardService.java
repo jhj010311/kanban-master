@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -141,7 +140,7 @@ public class BoardService {
         ).stream()
             .map(bm -> bm.getBoard())
             .filter(board -> board.getStatus() == BoardStatus.ACTIVE)
-            .collect(Collectors.toList());
+            .toList();
 
         // Owner 보드와 멤버 보드 합치기 (중복 제거)
         java.util.Map<Long, Board> allBoards = new java.util.HashMap<>();
@@ -185,7 +184,7 @@ public class BoardService {
                 }
                 return BoardResponse.from(board);
             })
-            .collect(Collectors.toList());
+            .toList();
 
         return userBoards;
     }
@@ -213,7 +212,7 @@ public class BoardService {
                        (memberOpt.isPresent() && memberOpt.get().getInvitationStatus() == com.kanban.board.member.InvitationStatus.ACCEPTED);
             })
             .map(BoardResponse::from)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**

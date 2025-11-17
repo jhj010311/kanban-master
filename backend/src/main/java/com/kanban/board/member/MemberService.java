@@ -229,7 +229,7 @@ public class MemberService {
     public List<BoardMemberResponse> getBoardMembers(Long boardId) {
         return boardMemberRepository.findByBoardIdOrderByCreatedAtAsc(boardId).stream()
                 .map(BoardMemberResponse::from)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     /**
@@ -238,7 +238,7 @@ public class MemberService {
     public List<BoardMemberResponse> getBoardAcceptedMembers(Long boardId) {
         return boardMemberRepository.findByBoardIdAndInvitationStatusOrderByCreatedAtAsc(boardId, InvitationStatus.ACCEPTED).stream()
                 .map(BoardMemberResponse::from)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     /**
@@ -272,7 +272,7 @@ public class MemberService {
     public List<BoardMemberResponse> getUserBoardMemberships(Long userId) {
         return boardMemberRepository.findByUserIdAndInvitationStatus(userId, InvitationStatus.ACCEPTED).stream()
                 .map(BoardMemberResponse::from)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     /**
@@ -303,7 +303,7 @@ public class MemberService {
     public List<BoardMemberResponse> getPendingInvitations(Long userId) {
         return boardMemberRepository.findPendingInvitationsByUserId(userId, InvitationStatus.PENDING).stream()
                 .map(BoardMemberResponse::from)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     /**
@@ -312,6 +312,6 @@ public class MemberService {
     public List<BoardMemberResponse> getAllInvitations(Long userId) {
         return boardMemberRepository.findAllInvitationsByUserId(userId).stream()
                 .map(BoardMemberResponse::from)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 }

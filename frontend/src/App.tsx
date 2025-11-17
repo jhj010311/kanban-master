@@ -7,6 +7,7 @@ import { CardProvider } from '@/context/CardContext';
 import DashboardPage from '@/pages/DashboardPage';
 import LoginPage from '@/pages/LoginPage';
 import { SignupPage } from '@/pages/SignupPage';
+import OAuth2CallbackHandler from '@/pages/OAuth2CallbackHandler';
 import BoardsPage from '@/pages/BoardsPage';
 import BoardDetailPage from '@/pages/BoardDetailPage';
 import ProfilePage from '@/pages/ProfilePage';
@@ -15,7 +16,7 @@ import { Footer } from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 import { DialogProvider } from '@/hooks/useDialog';
 
-const AUTH_CHROME_EXCLUDED_PATHS = ['/login', '/signup'];
+const AUTH_CHROME_EXCLUDED_PATHS = ['/login', '/signup', '/oauth2/callback'];
 
 const App = () => {
   const location = useLocation();
@@ -42,6 +43,7 @@ const App = () => {
     <Fragment>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/oauth2/callback" element={<OAuth2CallbackHandler />} />
       <Route
         path="/"
         element={(

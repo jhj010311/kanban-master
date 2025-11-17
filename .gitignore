@@ -69,3 +69,7 @@ backend/logs/
 
 # Data directories
 uploads/
+
+# Claude Code - Local MCP configurations
+.mcp.local.json
+.claude/mcp-configs/*.local.json

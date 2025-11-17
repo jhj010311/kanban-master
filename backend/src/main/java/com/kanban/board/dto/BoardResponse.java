@@ -52,6 +52,36 @@ public class BoardResponse {
     private String invitationToken;
 
     /**
+     * JPQL 생성자 표현식용 생성자 (14개 파라미터)
+     * Hibernate 6.4+에서 NULL 값 처리를 위해 필요
+     */
+    public BoardResponse(
+        Long id, Long workspaceId, Long ownerId, String ownerName,
+        String name, String description, String themeColor, String icon,
+        BoardStatus status, LocalDateTime deletedAt, LocalDateTime createdAt, LocalDateTime updatedAt,
+        InvitationStatus invitationStatus, String invitationToken
+    ) {
+        this.id = id;
+        this.workspaceId = workspaceId;
+        this.ownerId = ownerId;
+        this.ownerName = ownerName;
+        this.name = name;
+        this.description = description;
+        this.themeColor = themeColor;
+        this.icon = icon;
+        this.status = status;
+        this.deletedAt = deletedAt;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.invitationStatus = invitationStatus;
+        this.invitationToken = invitationToken;
+        // 나머지 필드들은 null로 초기화됨
+        this.currentUserRole = null;
+        this.canEdit = null;
+        this.canManage = null;
+    }
+
+    /**
      * 현재 사용자의 보드 내 역할 (VIEWER, EDITOR, MANAGER)
      * Owner인 경우 MANAGER로 설정됨
      */

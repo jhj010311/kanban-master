@@ -46,8 +46,8 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
                 className="w-full flex items-center justify-between gap-4 rounded-2xl border border-white/30 bg-white/50 px-4 py-3 text-left text-pastel-blue-900 shadow-sm transition-colors hover:bg-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-pastel-blue-300"
             >
                 <div className="flex-1">
-                    <p className="text-sm font-semibold">{title}</p>
-                    {summary && <p className="text-xs text-pastel-blue-500 mt-0.5">{summary}</p>}
+                    <div className="text-sm font-semibold">{title}</div>
+                    {summary && <div className="text-xs text-pastel-blue-500 mt-0.5">{summary}</div>}
                 </div>
                 <div className="flex items-center gap-2 text-xs font-medium text-pastel-blue-500">
                     <span>{isOpen ? '접기' : '펼치기'}</span>

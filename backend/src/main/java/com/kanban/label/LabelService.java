@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 라벨 서비스
@@ -41,7 +40,7 @@ public class LabelService {
         List<Label> labels = labelRepository.findByBoardIdOrderByDisplayOrder(boardId);
         return labels.stream()
                 .map(LabelResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

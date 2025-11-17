@@ -36,14 +36,22 @@ public class CardController {
 
     /**
      * 특정 카드 조회
+     * Spec § 6. 백엔드 규격 - API 엔드포인트
+     * FR-06b, FR-06d: includeRelations=true 파라미터로 부모/자식 정보 포함 여부 제어
      */
     @GetMapping("/{cardId}")
     public ResponseEntity<CardResponse> getCard(
             @PathVariable Long workspaceId,
             @PathVariable Long boardId,
             @PathVariable Long columnId,
-            @PathVariable Long cardId) {
-        CardResponse card = cardService.getCard(columnId, cardId);
+            @PathVariable Long cardId,
+            @RequestParam(required = false, defaultValue = "false") boolean includeRelations) {
+        CardResponse card;
+        if (includeRelations) {
+            card = cardService.getCardWithHierarchy(columnId, cardId);
+        } else {
+            card = cardService.getCard(columnId, cardId);
+        }
         return ResponseEntity.ok(card);
     }
 

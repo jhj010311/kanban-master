@@ -7,17 +7,20 @@ import { CardItem } from '@/components/CardItem';
 import { CreateCardModal } from '@/components/CreateCardModal';
 import { CreateColumnModal } from '@/components/CreateColumnModal';
 import { useDialog } from '@/hooks/useDialog';
+import type { Card } from '@/types/card';
 
 interface ColumnCardProps {
   column: Column;
   workspaceId: number;
   boardId: number;
+  boardOwnerId: number;
   canEdit: boolean;
   autoOpenCardId?: number | null;
   onAutoOpenHandled?: () => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
-export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boardId, canEdit, autoOpenCardId, onAutoOpenHandled }) => {
+export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boardId, boardOwnerId, canEdit, autoOpenCardId, onAutoOpenHandled, dragHandleProps }) => {
   const { deleteColumn } = useColumn();
   const { cards, loadCards, updateCard } = useCard();
   const { showConfirm } = useDialog();
@@ -29,7 +32,10 @@ export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boa
   const [cardsLoading, setCardsLoading] = useState(true);
   const [dragOverEmpty, setDragOverEmpty] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const cardListRef = useRef<HTMLDivElement>(null);
   const [animatedCardIds, setAnimatedCardIds] = useState<Set<number>>(new Set());
+  const [recentlyCreatedCardId, setRecentlyCreatedCardId] = useState<number | null>(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const loadColumnCards = async () => {
@@ -65,6 +71,33 @@ export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boa
       return hasChanges ? next : prev;
     });
   }, [cards, column.id]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!recentlyCreatedCardId) return;
+    const container = cardListRef.current;
+    if (!container) return;
+    const cardElement = container.querySelector<HTMLElement>(`[data-card-id="${recentlyCreatedCardId}"]`);
+    cardElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [cards, column.id, recentlyCreatedCardId]);
+
+  const handleCardCreated = (card: Card) => {
+    setRecentlyCreatedCardId(card.id);
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = setTimeout(() => {
+      setRecentlyCreatedCardId(null);
+    }, 3000);
+    void loadCards(workspaceId, boardId, column.id);
+  };
 
   const handleDelete = async () => {
     const confirmed = await showConfirm({
@@ -177,15 +210,45 @@ export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boa
         style={bgStyle}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b border-white/20">
-          <div className="flex-1">
+        <div className="flex items-center gap-2 p-4 border-b border-white/20">
+          {/* 드래그 핸들 아이콘 */}
+          {dragHandleProps && (
+            <div
+              {...dragHandleProps}
+              className="flex-shrink-0 cursor-grab active:cursor-grabbing text-pastel-blue-400 hover:text-pastel-blue-600 transition px-1"
+              title="드래그하여 칼럼 순서 변경"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle cx="6" cy="3" r="1.5" />
+                <circle cx="10" cy="3" r="1.5" />
+                <circle cx="6" cy="8" r="1.5" />
+                <circle cx="10" cy="8" r="1.5" />
+                <circle cx="6" cy="13" r="1.5" />
+                <circle cx="10" cy="13" r="1.5" />
+              </svg>
+            </div>
+          )}
+
+          {/* 제목 영역 (드래그 가능) */}
+          <div
+            className={`flex-1 min-w-0 ${dragHandleProps ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            {...dragHandleProps}
+          >
             <h3 className="font-bold text-pastel-blue-900">{column.name}</h3>
             {column.description && (
               <p className="text-xs text-pastel-blue-600 mt-1">{column.description}</p>
             )}
           </div>
+
+          {/* 메뉴 버튼 (드래그 불가) */}
           {canEdit && (
-            <div className="relative" ref={menuRef}>
+            <div className="relative flex-shrink-0" ref={menuRef}>
               <button
                 onClick={() => setShowMenu(!showMenu)}
                 className="menu-button p-2 hover:bg-white/20 rounded-lg transition"
@@ -223,6 +286,7 @@ export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boa
           onDragOver={handleCardAreaDragOver}
           onDragLeave={handleCardAreaDragLeave}
           onDrop={handleCardAreaDrop}
+          ref={cardListRef}
         >
           {cardsLoading ? (
             <div className="text-center text-pastel-blue-400 text-sm">
@@ -232,50 +296,18 @@ export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boa
             <>
               {cards[column.id] && cards[column.id].length > 0 && (
                 <div className="space-y-2 w-full">
-                  {cards[column.id]
+                  {[...(cards[column.id] || [])]
                     .sort((a, b) => {
-                      // Helper function to calculate due date status
-                      const getDueDateStatus = (dueDate?: string) => {
-                        if (!dueDate) return { isOverdue: false, isDueSoon: false, daysUntilDue: Infinity };
-                        try {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          const due = new Date(dueDate);
-                          due.setHours(0, 0, 0, 0);
-                          const daysUntilDue = Math.floor((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                          return {
-                            isOverdue: daysUntilDue < 0,
-                            isDueSoon: daysUntilDue >= 0 && daysUntilDue <= 3,
-                            daysUntilDue
-                          };
-                        } catch {
-                          return { isOverdue: false, isDueSoon: false, daysUntilDue: Infinity };
-                        }
+                      const parseDate = (value?: string) => {
+                        if (!value) return 0;
+                        const timestamp = Date.parse(value);
+                        return Number.isNaN(timestamp) ? 0 : timestamp;
                       };
-
-                      const aStatus = getDueDateStatus(a.dueDate);
-                      const bStatus = getDueDateStatus(b.dueDate);
-
-                      // 1. 기한 지남 우선
-                      if (aStatus.isOverdue !== bStatus.isOverdue) {
-                        return aStatus.isOverdue ? -1 : 1;
+                      const createdDiff = parseDate(a.createdAt) - parseDate(b.createdAt);
+                      if (createdDiff !== 0) {
+                        return createdDiff;
                       }
-
-                      // 2. 임박 우선
-                      if (aStatus.isDueSoon !== bStatus.isDueSoon) {
-                        return aStatus.isDueSoon ? -1 : 1;
-                      }
-
-                      // 3. 중요도 순 (HIGH > MEDIUM > LOW > 없음)
-                      const priorityOrder: { [key: string]: number } = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-                      const aPriority = a.priority ? priorityOrder[a.priority] ?? 3 : 3;
-                      const bPriority = b.priority ? priorityOrder[b.priority] ?? 3 : 3;
-                      if (aPriority !== bPriority) {
-                        return aPriority - bPriority;
-                      }
-
-                      // 4. 같은 카테고리 내에서는 position 순서 유지
-                      return a.position - b.position;
+                      return a.id - b.id;
                     })
                     .map((card) => (
                       <CardItem
@@ -283,11 +315,13 @@ export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boa
                         card={card}
                         workspaceId={workspaceId}
                         boardId={boardId}
+                        boardOwnerId={boardOwnerId}
                         columnId={column.id}
                         canEdit={canEdit}
                         autoOpen={autoOpenCardId === card.id}
                         onAutoOpenHandled={onAutoOpenHandled}
                         animateOnMount={!animatedCardIds.has(card.id)}
+                        isRecentlyCreated={card.id === recentlyCreatedCardId}
                       />
                     ))}
                 </div>
@@ -314,9 +348,8 @@ export const ColumnCard: React.FC<ColumnCardProps> = ({ column, workspaceId, boa
           columnId={column.id}
           onClose={() => {
             setShowCreateCardModal(false);
-            // 카드 목록 새로고침
-            loadCards(workspaceId, boardId, column.id);
           }}
+          onSuccess={handleCardCreated}
         />
       )}
 

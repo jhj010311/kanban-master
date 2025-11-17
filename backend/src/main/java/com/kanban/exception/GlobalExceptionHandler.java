@@ -171,6 +171,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 
+    /**
+     * 자식 카드가 있는 부모 카드 삭제 시도 예외 처리
+     * Spec § 7. 보안 처리 - 데이터 무결성
+     * FR-06h 변경: 부모 카드 삭제 차단
+     * 결정 사항 2: 자식이 있으면 부모 삭제 차단
+     */
+    @ExceptionHandler(CardHasChildrenException.class)
+    public ResponseEntity<ApiErrorResponse> handleCardHasChildren(
+            CardHasChildrenException ex,
+            HttpServletRequest request
+    ) {
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.CONFLICT,
+                ex.getMessage(),
+                request.getRequestURI(),
+                List.of("자식 카드 개수: " + ex.getChildCount())
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGenericException(
             Exception ex,

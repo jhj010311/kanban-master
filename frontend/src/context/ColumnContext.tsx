@@ -11,6 +11,7 @@ interface ColumnContextType {
   updateColumn: (workspaceId: number, boardId: number, columnId: number, request: UpdateColumnRequest) => Promise<Column>;
   deleteColumn: (workspaceId: number, boardId: number, columnId: number) => Promise<void>;
   updateColumnPosition: (workspaceId: number, boardId: number, columnId: number, newPosition: number) => Promise<Column>;
+  setColumnsOptimistic: (columns: Column[]) => void;
 }
 
 const ColumnContext = createContext<ColumnContextType | undefined>(undefined);
@@ -92,9 +93,7 @@ export const ColumnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       try {
         setError(null);
         const updated = await columnService.updateColumnPosition(workspaceId, boardId, columnId, newPosition);
-        setColumns(prev =>
-          prev.map(col => (col.id === columnId ? updated : col))
-        );
+        // 낙관적 업데이트는 ColumnsSection에서 처리하므로 여기서는 API 호출만
         return updated;
       } catch (err) {
         const message = err instanceof Error ? err.message : '칼럼 위치 변경에 실패했습니다';
@@ -105,6 +104,10 @@ export const ColumnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     },
     []
   );
+
+  const setColumnsOptimistic = useCallback((newColumns: Column[]) => {
+    setColumns(newColumns);
+  }, []);
 
   return (
     <ColumnContext.Provider
@@ -117,6 +120,7 @@ export const ColumnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         updateColumn,
         deleteColumn,
         updateColumnPosition,
+        setColumnsOptimistic,
       }}
     >
       {children}

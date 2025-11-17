@@ -5,27 +5,32 @@ import { ErrorNotification } from '@/components/ErrorNotification';
 import { EditCardModal } from '@/components/EditCardModal';
 import { useDialog } from '@/hooks/useDialog';
 import { Avatar } from '@/components/common/Avatar';
+import cardService from '@/services/cardService';
 
 interface CardItemProps {
   card: Card;
   workspaceId: number;
   boardId: number;
+  boardOwnerId: number;
   columnId: number;
   canEdit: boolean;
   autoOpen?: boolean;
   onAutoOpenHandled?: () => void;
   animateOnMount?: boolean;
+  isRecentlyCreated?: boolean;
 }
 
 export const CardItem: React.FC<CardItemProps> = ({
   card,
   workspaceId,
   boardId,
+  boardOwnerId,
   columnId,
   canEdit,
   autoOpen = false,
   onAutoOpenHandled,
   animateOnMount = false,
+  isRecentlyCreated = false,
 }) => {
   const { deleteCard, updateCard, loadCards } = useCard();
   const { showConfirm } = useDialog();
@@ -34,6 +39,8 @@ export const CardItem: React.FC<CardItemProps> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
+  const [cardWithRelations, setCardWithRelations] = useState<Card | null>(null);
+  const [isLoadingRelations, setIsLoadingRelations] = useState(false);
 
   const handleDelete = async () => {
     const confirmed = await showConfirm({
@@ -91,12 +98,33 @@ export const CardItem: React.FC<CardItemProps> = ({
   };
 
   useEffect(() => {
-    if (autoOpen && !hasAutoOpened) {
-      setShowEditModal(true);
-      setHasAutoOpened(true);
-      onAutoOpenHandled?.();
-    }
-  }, [autoOpen, hasAutoOpened, onAutoOpenHandled]);
+    const loadCardForAutoOpen = async () => {
+      if (autoOpen && !hasAutoOpened) {
+        try {
+          setIsLoadingRelations(true);
+          const fullCard = await cardService.getCard(
+            workspaceId,
+            boardId,
+            columnId,
+            card.id,
+            true // includeRelations
+          );
+          setCardWithRelations(fullCard);
+          setShowEditModal(true);
+          setHasAutoOpened(true);
+          onAutoOpenHandled?.();
+        } catch (err) {
+          console.error('Failed to load card for auto-open:', err);
+          const message = err instanceof Error ? err.message : '카드 정보를 불러오는데 실패했습니다';
+          setErrorMessage(message);
+        } finally {
+          setIsLoadingRelations(false);
+        }
+      }
+    };
+
+    loadCardForAutoOpen();
+  }, [autoOpen, hasAutoOpened, onAutoOpenHandled, workspaceId, boardId, columnId, card.id]);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     if (!canEdit) return;
@@ -198,27 +226,49 @@ export const CardItem: React.FC<CardItemProps> = ({
     return plainText;
   }, [card.description]);
 
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleCardClick = async (e: React.MouseEvent) => {
     // 메뉴 버튼이나 체크박스 클릭 시에는 모달을 열지 않음
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('[role="checkbox"]')) {
       return;
     }
-    setShowEditModal(true);
+
+    // includeRelations=true로 카드 정보 조회 후 모달 열기
+    try {
+      setIsLoadingRelations(true);
+      setErrorMessage(null);
+      const fullCard = await cardService.getCard(
+        workspaceId,
+        boardId,
+        columnId,
+        card.id,
+        true // includeRelations
+      );
+      setCardWithRelations(fullCard);
+      setShowEditModal(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '카드 정보를 불러오는데 실패했습니다';
+      setErrorMessage(message);
+      console.error('Failed to load card with relations:', err);
+    } finally {
+      setIsLoadingRelations(false);
+    }
   };
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full" data-card-id={card.id}>
       <div
-        className={`bg-white rounded-lg shadow-sm border border-pastel-blue-200 p-3 hover:shadow-md transition cursor-pointer w-full ${
+        className={`bg-white rounded-lg shadow-sm border border-pastel-blue-200 p-3 hover:shadow-md transition w-full ${
           isDragging ? 'opacity-50' : ''
-        } ${animateOnMount ? 'card-enter' : ''} ${!canEdit ? 'cursor-default' : ''}`}
-        draggable={canEdit}
-        onDragStart={canEdit ? handleDragStart : undefined}
-        onDragEnd={canEdit ? handleDragEnd : undefined}
-        onDragOver={canEdit ? handleDragOver : undefined}
-        onDrop={canEdit ? handleDrop : undefined}
-        onClick={handleCardClick}
+        } ${animateOnMount ? 'card-enter' : ''} ${isLoadingRelations ? 'opacity-70 cursor-wait' : !canEdit ? 'cursor-default' : 'cursor-pointer'} ${
+          isRecentlyCreated ? 'card-new-glow' : ''
+        }`}
+        draggable={canEdit && !isLoadingRelations}
+        onDragStart={canEdit && !isLoadingRelations ? handleDragStart : undefined}
+        onDragEnd={canEdit && !isLoadingRelations ? handleDragEnd : undefined}
+        onDragOver={canEdit && !isLoadingRelations ? handleDragOver : undefined}
+        onDrop={canEdit && !isLoadingRelations ? handleDrop : undefined}
+        onClick={!isLoadingRelations ? handleCardClick : undefined}
       >
         {/* Title and Menu */}
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -366,18 +416,30 @@ export const CardItem: React.FC<CardItemProps> = ({
             {!card.isCompleted && isDueSoon && !isOverdue && ` (${dueDateInfo.daysUntilDue}일)`}
           </div>
         )}
+
+        {/* 자식 카드 개수 배지 (있는 경우에만 표시) */}
+        {card.childCount !== undefined && card.childCount > 0 && (
+          <div className="flex items-center gap-1 mt-2">
+            <div className="flex items-center gap-1 px-2 py-1 rounded bg-pastel-blue-100 text-pastel-blue-700 text-xs font-medium border border-pastel-blue-200">
+              <span>🔗</span>
+              <span>하위 카드 {card.childCount}개</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Edit Card Modal */}
-      {showEditModal && (
+      {showEditModal && cardWithRelations && (
         <EditCardModal
-          card={card}
+          card={cardWithRelations}
           workspaceId={workspaceId}
           boardId={boardId}
+          boardOwnerId={boardOwnerId}
           columnId={columnId}
           canEdit={canEdit}
           onClose={() => {
             setShowEditModal(false);
+            setCardWithRelations(null);
             onAutoOpenHandled?.();
           }}
         />

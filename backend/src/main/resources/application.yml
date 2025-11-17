@@ -1,117 +1,137 @@
 spring:
-  application:
-    name: kanban-backend
+    application:
+        name: kanban-backend
 
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    profiles:
+        active: ${SPRING_PROFILES_ACTIVE:dev}
 
-  flyway:
-    enabled: false
+    flyway:
+        enabled: false
 
-  servlet:
-    multipart:
-      max-file-size: 5MB
-      max-request-size: 5MB
-      enabled: true
+    servlet:
+        multipart:
+            max-file-size: 5MB
+            max-request-size: 5MB
+            enabled: true
 
-  datasource:
-    url: jdbc:h2:file:./data/kanban;AUTO_SERVER=TRUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
+    security:
+        oauth2:
+            client:
+                registration:
+                    google:
+                        client-id: ${GOOGLE_CLIENT_ID}
+                        client-secret: ${GOOGLE_CLIENT_SECRET}
+                        scope:
+                            - openid
+                            - email
+                            - profile
+                        redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
+                        client-name: Google
+                provider:
+                    google:
+                        authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+                        token-uri: https://oauth2.googleapis.com/token
+                        user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+                        user-name-attribute: sub
 
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+    datasource:
+        url: jdbc:h2:file:./data/kanban;AUTO_SERVER=TRUE
+        driver-class-name: org.h2.Driver
+        username: sa
+        password:
+        hikari:
+            maximum-pool-size: 10
+            minimum-idle: 5
+            connection-timeout: 30000
+            idle-timeout: 600000
+            max-lifetime: 1800000
 
-  jpa:
-    open-in-view: false
-    database-platform: org.hibernate.dialect.H2Dialect
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        use_sql_comments: true
-        jdbc:
-          batch_size: 20
-        order_inserts: true
-        order_updates: true
+    h2:
+        console:
+            enabled: true
+            path: /h2-console
 
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-      indent-output: true
-    deserialization:
-      fail-on-unknown-properties: false
-    time-zone: UTC
+    jpa:
+        open-in-view: false
+        database-platform: org.hibernate.dialect.H2Dialect
+        hibernate:
+            ddl-auto: update
+        show-sql: true
+        properties:
+            hibernate:
+                format_sql: true
+                use_sql_comments: true
+                jdbc:
+                    batch_size: 20
+                order_inserts: true
+                order_updates: true
+
+    jackson:
+        serialization:
+            write-dates-as-timestamps: false
+            indent-output: true
+        deserialization:
+            fail-on-unknown-properties: false
+        time-zone: UTC
 
 server:
-  port: ${SERVER_PORT:8080}
-  error:
-    include-message: always
-    include-binding-errors: always
-    include-stacktrace: on_param
-    include-exception: false
-  compression:
-    enabled: true
-    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    port: ${SERVER_PORT:8080}
+    error:
+        include-message: always
+        include-binding-errors: always
+        include-stacktrace: on_param
+        include-exception: false
+    compression:
+        enabled: true
+        mime-types: application/json,application/xml,text/html,text/xml,text/plain
 
 # OpenAPI/Swagger Configuration
 springdoc:
-  api-docs:
-    path: /v3/api-docs
-  swagger-ui:
-    path: /swagger-ui.html
-    enabled: true
-    operations-sorter: method
-    tags-sorter: alpha
-  show-actuator: false
+    api-docs:
+        path: /v3/api-docs
+    swagger-ui:
+        path: /swagger-ui.html
+        enabled: true
+        operations-sorter: method
+        tags-sorter: alpha
+    show-actuator: false
 
 # Logging Configuration
 logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) %magenta([%thread]) %cyan(%logger{36}) - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
-  level:
-    root: INFO
-    com.kanban: DEBUG
-    org.springframework.web: DEBUG
-    org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-  file:
-    name: logs/kanban-backend.log
-    max-size: 10MB
-    max-history: 30
-    total-size-cap: 1GB
+    pattern:
+        console: '%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) %magenta([%thread]) %cyan(%logger{36}) - %msg%n'
+        file: '%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n'
+    level:
+        root: INFO
+        com.kanban: DEBUG
+        org.springframework.web: DEBUG
+        org.springframework.security: DEBUG
+        org.hibernate.SQL: DEBUG
+        org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    file:
+        name: logs/kanban-backend.log
+        max-size: 10MB
+        max-history: 30
+        total-size-cap: 1GB
 
 # Management & Actuator (optional, for production monitoring)
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: when-authorized
+    endpoints:
+        web:
+            exposure:
+                include: health,info,metrics
+    endpoint:
+        health:
+            show-details: when-authorized
 
 security:
-  jwt:
-    secret-key: ${JWT_SECRET:dGhpc2lzYS1sb25nLWFuZC1zZWN1cmUtc3VwZXItc2VjcmV0LXN0cmluZw==}
-    access-token-validity-seconds: 900
-    refresh-token-validity-seconds: 1209600
-    refresh-token-cookie-name: KANBAN_REFRESH_TOKEN
+    jwt:
+        secret-key: ${JWT_SECRET:dGhpc2lzYS1sb25nLWFuZC1zZWN1cmUtc3VwZXItc2VjcmV0LXN0cmluZw==}
+        access-token-validity-seconds: 900
+        refresh-token-validity-seconds: 1209600
+        refresh-token-cookie-name: KANBAN_REFRESH_TOKEN
 
 # File Upload Configuration
 file:
-  upload:
-    path: ${FILE_UPLOAD_PATH:uploads/avatars}
+    upload:
+        path: ${FILE_UPLOAD_PATH:uploads/avatars}

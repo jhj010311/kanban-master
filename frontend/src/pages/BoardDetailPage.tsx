@@ -104,6 +104,7 @@ const BoardDetailPage = () => {
                 columnsLoading={columnsLoading}
                 workspaceId={workspaceNumericId}
                 boardId={boardNumericId}
+                boardOwnerId={board?.ownerId ?? 0}
                 canEdit={canEdit}
                 onCreateColumn={() => setShowCreateColumnModal(true)}
                 autoOpenCardId={effectiveAutoOpenCardId}

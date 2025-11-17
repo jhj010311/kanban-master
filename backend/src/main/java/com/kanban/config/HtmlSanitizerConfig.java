@@ -16,7 +16,7 @@ public class HtmlSanitizerConfig {
     public PolicyFactory htmlSanitizerPolicy() {
         return new HtmlPolicyBuilder()
                 // 기본 텍스트 서식
-                .allowElements("p", "br", "strong", "em", "u", "strike")
+                .allowElements("p", "br", "strong", "em", "u", "strike", "s")
                 // 제목
                 .allowElements("h1", "h2", "h3", "h4", "h5", "h6")
                 // 목록

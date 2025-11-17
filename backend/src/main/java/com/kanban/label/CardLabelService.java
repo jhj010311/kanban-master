@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 카드-라벨 연결 서비스
@@ -35,7 +34,7 @@ public class CardLabelService {
         List<CardLabel> cardLabels = cardLabelRepository.findByCardId(cardId);
         return cardLabels.stream()
                 .map(cl -> LabelResponse.from(cl.getLabel()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

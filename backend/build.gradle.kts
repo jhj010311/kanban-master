@@ -1,7 +1,7 @@
 plugins {
     java
     jacoco
-    id("org.springframework.boot") version "3.2.0"
+    id("org.springframework.boot") version "3.5.7"
     id("io.spring.dependency-management") version "1.1.4"
     id("org.sonarqube") version "4.4.1.3373"
 }
@@ -31,6 +31,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-security")
+
+    // OAuth2 Client
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
+
     implementation("io.jsonwebtoken:jjwt-api:0.11.5")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.11.5")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.11.5")
@@ -47,6 +51,9 @@ dependencies {
 
     // HTML Sanitization
     implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20220608.1")
+
+    // Environment Variables
+    implementation("io.github.cdimascio:dotenv-java:3.0.0")
 
     // Lombok
     compileOnly("org.projectlombok:lombok")

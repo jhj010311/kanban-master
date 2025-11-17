@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "fast-playwright": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@tontoko/fast-playwright-mcp@latest",
+                "--isolated",
+                "--config=.claude/mcp-configs/fast-playwright.json"
+            ]
+        }
+    }
+}

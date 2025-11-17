@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 템플릿 서비스
@@ -46,7 +45,7 @@ public class TemplateService {
         log.debug("Fetching public templates");
         return templateRepository.findPublicTemplates().stream()
                 .map(BoardTemplateResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -66,7 +65,7 @@ public class TemplateService {
 
         return publicTemplates.stream()
                 .map(BoardTemplateResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -76,7 +75,7 @@ public class TemplateService {
         log.debug("Fetching public templates by category: {}", category);
         return templateRepository.findPublicTemplatesByCategory(category).stream()
                 .map(BoardTemplateResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

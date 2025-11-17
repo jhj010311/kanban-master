@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.stream.Collectors;
 
 /**
  * 칼럼(BoardColumn) 비즈니스 로직 서비스
@@ -36,7 +35,7 @@ public class ColumnService {
     public List<ColumnResponse> getColumnsByBoard(Long boardId) {
         return columnRepository.findByBoardIdOrderByPosition(boardId).stream()
                 .map(ColumnResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

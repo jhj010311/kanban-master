@@ -84,6 +84,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
 
     /**
      * DTO 형태로 보드 조회 (워크스페이스/소유자 정보 포함)
+     * 14개 파라미터 생성자 사용 (Hibernate 6.4+ 호환)
      */
     @Query("SELECT new com.kanban.board.dto.BoardResponse(" +
            "b.id, b.workspace.id, b.owner.id, b.owner.name, b.name, b.description, " +

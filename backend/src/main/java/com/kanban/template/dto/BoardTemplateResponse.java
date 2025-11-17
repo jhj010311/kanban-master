@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 보드 템플릿 응답 DTO
@@ -42,7 +41,7 @@ public class BoardTemplateResponse {
                 .workspaceId(template.getWorkspace() != null ? template.getWorkspace().getId() : null)
                 .columns(template.getColumns().stream()
                         .map(TemplateColumnDto::from)
-                        .collect(Collectors.toList()))
+                        .toList())
                 .createdAt(template.getCreatedAt())
                 .updatedAt(template.getUpdatedAt())
                 .build();

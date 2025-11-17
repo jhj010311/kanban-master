@@ -6,6 +6,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 카드(Card) 엔티티
@@ -79,4 +81,24 @@ public class Card extends BaseEntity {
     @Column(name = "is_completed", nullable = false)
     @Builder.Default
     private Boolean isCompleted = false;
+
+    // Spec § 6. 백엔드 규격 - 데이터베이스 스키마 확장
+    // FR-06a: 부모-자식 관계 데이터 모델
+
+    /**
+     * 부모 카드 (Self-Referential ManyToOne)
+     * 1단계 계층 구조만 지원 (부모 → 자식, 손자 불가)
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_card_id")
+    private Card parentCard;
+
+    /**
+     * 자식 카드 목록 (OneToMany)
+     * mappedBy로 양방향 관계 설정
+     * Cascade 없음: 부모 삭제 시 자식 삭제 안 함 (서비스 레벨에서 차단)
+     */
+    @OneToMany(mappedBy = "parentCard")
+    @Builder.Default
+    private List<Card> childCards = new ArrayList<>();
 }

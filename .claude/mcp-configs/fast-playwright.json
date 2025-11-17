@@ -1,0 +1,11 @@
+{
+  "name": "browser_navigate",
+  "arguments": {
+    "url": "https://example.com",
+    "expectation": {
+      "includeSnapshot": false,
+      "includeConsole": false,
+      "includeTabs": false
+    }
+  }
+}

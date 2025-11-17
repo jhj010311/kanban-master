@@ -39,6 +39,35 @@ class AuthService {
     const response = await axiosInstance.post<TokenRefreshResponse>('/auth/refresh');
     return response.data;
   }
+
+  /**
+   * Get all linked OAuth2 identities for the current user
+   */
+  async getUserIdentities(): Promise<UserIdentity[]> {
+    const response = await axiosInstance.get<UserIdentity[]>('/auth/me/identities');
+    return response.data;
+  }
+
+  /**
+   * Unlink an OAuth2 identity from the current user
+   * @param identityId the identity ID to unlink
+   */
+  async unlinkIdentity(identityId: number): Promise<void> {
+    await axiosInstance.delete(`/auth/oauth2/identities/${identityId}`);
+  }
 }
 
 export const authService = new AuthService();
+
+/**
+ * OAuth2 user identity interface
+ */
+export interface UserIdentity {
+  id: number;
+  provider: 'GOOGLE' | 'KAKAO' | 'NAVER';
+  providerUserId: string;
+  email: string;
+  name: string;
+  profileImageUrl: string | null;
+  createdAt: string;
+}

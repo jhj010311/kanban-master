@@ -1,15 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/types/card';
 import { useCard } from '@/context/CardContext';
+import { useAuth } from '@/context/AuthContext';
 import { ErrorNotification } from '@/components/ErrorNotification';
 import { LabelSelector } from '@/components/label/LabelSelector';
 import { userService } from '@/services/userService';
 import { labelService } from '@/services/labelService';
+import cardService from '@/services/cardService';
 import type { UserSearchResult } from '@/types/user';
 import { useModalAnimation } from '@/hooks/useModalAnimation';
 import { Avatar } from '@/components/common/Avatar';
 import RichTextEditor from '@/components/RichTextEditor';
-import { CollapsibleSection } from '@/components/common/CollapsibleSection';
+import { CommentSection } from '@/components/CommentSection';
+import ParentCardLink from '@/components/ParentCardLink';
+import ChildCardList from '@/components/ChildCardList';
+import { CreateCardModal } from '@/components/CreateCardModal';
 import {
     modalOverlayClass,
     modalPanelClass,
@@ -26,6 +31,7 @@ interface EditCardModalProps {
     card: Card;
     workspaceId: number;
     boardId: number;
+    boardOwnerId: number;
     columnId: number;
     canEdit: boolean;
     onClose: () => void;
@@ -45,12 +51,22 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
     card,
     workspaceId,
     boardId,
+    boardOwnerId,
     columnId,
     canEdit,
     onClose,
 }) => {
     const { updateCard, loadCards } = useCard();
+    const { user } = useAuth();
     const { stage, close } = useModalAnimation(onClose);
+
+    // 현재 표시 중인 카드 상태 (부모/자식 네비게이션용)
+    const [currentCard, setCurrentCard] = useState<Card>(card);
+    const [isNavigating, setIsNavigating] = useState(false);
+
+    // 자식 카드 생성 모달 상태
+    const [showCreateChildModal, setShowCreateChildModal] = useState(false);
+
     const [title, setTitle] = useState(card.title);
     const [description, setDescription] = useState(card.description || '');
     const [selectedColor, setSelectedColor] = useState(card.bgColor || cardColors[0].hex);
@@ -73,11 +89,13 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
     );
     const [assigneeSearching, setAssigneeSearching] = useState(false);
     const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+    const [descriptionSaving, setDescriptionSaving] = useState(false);
+    const titleInputRef = useRef<HTMLInputElement>(null);
     const assigneeInputRef = useRef<HTMLInputElement>(null);
     const assigneeInputContainerRef = useRef<HTMLDivElement>(null);
     const assigneeDropdownRef = useRef<HTMLDivElement>(null);
     const assigneeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const selectedColorInfo = cardColors.find((color) => color.hex === selectedColor);
+    const descriptionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const performAssigneeSearch = async (keyword: string) => {
         const trimmedKeyword = keyword.trim();
@@ -128,6 +146,85 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
         setAssigneeDropdownOpen(false);
     };
 
+    // 부모/자식 카드 네비게이션 핸들러
+    const handleNavigateToCard = async (targetCardId: number) => {
+        try {
+            setIsNavigating(true);
+            setError(null);
+
+            // includeRelations=true로 계층 정보 포함하여 카드 조회
+            const targetCard = await cardService.getCard(
+                workspaceId,
+                boardId,
+                columnId,
+                targetCardId,
+                true
+            );
+
+            // 현재 카드 상태 업데이트
+            setCurrentCard(targetCard);
+
+            // 폼 필드 초기화
+            setTitle(targetCard.title);
+            setDescription(targetCard.description || '');
+            setSelectedColor(targetCard.bgColor || cardColors[0].hex);
+            setPriority(targetCard.priority || '');
+            setDueDate(targetCard.dueDate || '');
+            setIsCompleted(targetCard.isCompleted);
+            setSelectedLabelIds(targetCard.labels?.map((l) => l.id) || []);
+            setSelectedAssignee(
+                targetCard.assignee
+                    ? {
+                          id: -1,
+                          name: targetCard.assignee,
+                          email: '',
+                      }
+                    : null
+            );
+
+            // 담당자 검색 필드 초기화
+            setAssigneeSearchInput('');
+            setAssigneeResults([]);
+            setAssigneeDropdownOpen(false);
+        } catch (err) {
+            console.error('Failed to navigate to card:', err);
+            setError(err instanceof Error ? err.message : '카드 정보를 불러오는데 실패했습니다');
+        } finally {
+            setIsNavigating(false);
+        }
+    };
+
+    // 설명 자동 저장 (debounced)
+    const saveDescriptionOnly = useCallback(async (newDescription: string) => {
+        if (!canEdit) return;
+
+        try {
+            setDescriptionSaving(true);
+            await updateCard(workspaceId, boardId, columnId, currentCard.id, {
+                description: newDescription,
+            });
+        } catch (err) {
+            console.error('Failed to save description:', err);
+            setError(err instanceof Error ? err.message : '설명 저장에 실패했습니다');
+        } finally {
+            setDescriptionSaving(false);
+        }
+    }, [canEdit, updateCard, workspaceId, boardId, columnId, currentCard.id]);
+
+    const handleDescriptionChange = (newDescription: string) => {
+        setDescription(newDescription);
+
+        // debounce 타이머 초기화
+        if (descriptionDebounceRef.current) {
+            clearTimeout(descriptionDebounceRef.current);
+        }
+
+        // 2초 후 자동 저장
+        descriptionDebounceRef.current = setTimeout(() => {
+            saveDescriptionOnly(newDescription);
+        }, 2000);
+    };
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as Node;
@@ -149,25 +246,36 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
         };
     }, [assigneeDropdownOpen]);
 
+    // 모달이 열릴 때 제목 필드에 자동 포커스
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            titleInputRef.current?.focus();
+        }, 100);
+        return () => clearTimeout(timer);
+    }, []);
+
     useEffect(() => {
         return () => {
             if (assigneeDebounceRef.current) {
                 clearTimeout(assigneeDebounceRef.current);
             }
+            if (descriptionDebounceRef.current) {
+                clearTimeout(descriptionDebounceRef.current);
+            }
         };
     }, []);
 
     useEffect(() => {
-        if (card.assignee) {
+        if (currentCard.assignee) {
             setSelectedAssignee({
                 id: -1,
-                name: card.assignee,
+                name: currentCard.assignee,
                 email: '',
             });
         } else {
             setSelectedAssignee(null);
         }
-    }, [card.assignee]);
+    }, [currentCard.assignee]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -182,14 +290,14 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
             setError(null);
 
             // 라벨 업데이트 먼저 수행 (변경이 있을 경우에만)
-            const currentLabelIds = card.labels?.map((l) => l.id).sort() || [];
+            const currentLabelIds = currentCard.labels?.map((l) => l.id).sort() || [];
             const newLabelIds = [...selectedLabelIds].sort();
             if (JSON.stringify(currentLabelIds) !== JSON.stringify(newLabelIds)) {
-                await labelService.assignLabelsToCard(card.id, selectedLabelIds);
+                await labelService.assignLabelsToCard(currentCard.id, selectedLabelIds);
             }
 
             // 기본 정보 업데이트 후 전체 데이터 새로고침
-            await updateCard(workspaceId, boardId, columnId, card.id, {
+            await updateCard(workspaceId, boardId, columnId, currentCard.id, {
                 title: title.trim(),
                 description: description.trim() || undefined,
                 bgColor: selectedColor || undefined,
@@ -225,13 +333,27 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
                 <div
                     className={modalPanelClass({
                         stage,
-                        maxWidth: 'max-w-lg',
-                        scrollable: true,
+                        maxWidth: 'max-w-6xl',
+                        scrollable: false,
                     })}
+                    style={{ maxHeight: '90vh' }}
                 >
-                    {/* 헤더 */}
-                    <h2 className="text-2xl font-bold text-pastel-blue-900 mb-1">카드 수정</h2>
-                    <p className="text-sm text-pastel-blue-600 mb-6">카드 정보를 수정하세요</p>
+                    {/* 2열 레이아웃 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                        {/* 왼쪽 컬럼: 카드 메타데이터 */}
+                        <div className="overflow-y-auto pr-4 flex flex-col" style={{ maxHeight: '80vh' }}>
+                            {/* 헤더 */}
+                            <h2 className="text-2xl font-bold text-pastel-blue-900 mb-1">카드 수정</h2>
+                            <p className="text-sm text-pastel-blue-600 mb-6">카드 정보를 수정하세요</p>
+
+                            {/* 부모 카드 링크 (있는 경우에만 표시) */}
+                            {currentCard.parentCard && (
+                                <ParentCardLink
+                                    parentCard={currentCard.parentCard}
+                                    onNavigate={handleNavigateToCard}
+                                    disabled={isNavigating}
+                                />
+                            )}
 
                     <form onSubmit={canEdit ? handleSubmit : (e) => e.preventDefault()}>
                         {/* Read-Only Notice */}
@@ -245,9 +367,16 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
                         <div className="mb-4">
                             <label className={modalLabelClass}>카드 제목 *</label>
                             <input
+                                ref={titleInputRef}
                                 type="text"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey && canEdit) {
+                                        e.preventDefault();
+                                        handleSubmit(e as unknown as React.FormEvent);
+                                    }
+                                }}
                                 placeholder="예: 로그인 기능 구현"
                                 className={modalInputClass}
                                 disabled={loading || !canEdit}
@@ -255,35 +384,38 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
                             />
                         </div>
 
-                        {/* 설명 입력 */}
-                        <div className="mb-4">
-                            <label className={modalLabelClass}>설명</label>
-                            <RichTextEditor
-                                value={description}
-                                onChange={setDescription}
-                                placeholder="카드에 대한 설명을 입력하세요 (선택사항)"
-                                readOnly={!canEdit}
-                                disabled={loading || !canEdit}
-                                maxLength={50000}
-                            />
-                        </div>
+                        {/* 우선순위 + 마감일 (2열 그리드) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            {/* 우선순위 선택 */}
+                            <div>
+                                <label className={modalLabelClass}>우선순위</label>
+                                <select
+                                    value={priority}
+                                    onChange={(e) => setPriority(e.target.value)}
+                                    className={modalSelectClass}
+                                    disabled={loading || !canEdit}
+                                >
+                                    <option value="">우선순위 선택 (선택사항)</option>
+                                    {cardPriorities.map((p) => (
+                                        <option key={p} value={p}>
+                                            {p}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
 
-                        {/* 우선순위 선택 */}
-                        <div className="mb-4">
-                            <label className={modalLabelClass}>우선순위</label>
-                            <select
-                                value={priority}
-                                onChange={(e) => setPriority(e.target.value)}
-                                className={modalSelectClass}
-                                disabled={loading || !canEdit}
-                            >
-                                <option value="">우선순위 선택 (선택사항)</option>
-                                {cardPriorities.map((p) => (
-                                    <option key={p} value={p}>
-                                        {p}
-                                    </option>
-                                ))}
-                            </select>
+                            {/* 마감 날짜 입력 */}
+                            <div>
+                                <label className={modalLabelClass}>마감일</label>
+                                <input
+                                    type="date"
+                                    value={dueDate}
+                                    onChange={(e) => setDueDate(e.target.value)}
+                                    className={modalInputClass}
+                                    disabled={loading || !canEdit}
+                                    readOnly={!canEdit}
+                                />
+                            </div>
                         </div>
 
                         {/* 담당자 입력 */}
@@ -357,75 +489,54 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
                             )}
                         </div>
 
-                        {/* 마감 날짜 입력 */}
-                        <div className="mb-4">
-                            <label className={modalLabelClass}>마감일</label>
-                            <input
-                                type="date"
-                                value={dueDate}
-                                onChange={(e) => setDueDate(e.target.value)}
-                                className={modalInputClass}
-                                disabled={loading || !canEdit}
-                                readOnly={!canEdit}
-                            />
-                        </div>
-
-                        {/* 상세 정보 (라벨 + 색상) */}
-                        <CollapsibleSection
-                            className="mb-6"
-                            title="상세 정보"
-                            summary={
-                                <div className="flex items-center gap-2 text-xs text-pastel-blue-500">
-                                    <span>
-                                        {selectedLabelIds.length > 0
-                                            ? `라벨 ${selectedLabelIds.length}개`
-                                            : '라벨 미선택'}
-                                    </span>
-                                    <span className="text-pastel-blue-200">•</span>
-                                    <span
-                                        className="inline-flex h-4 w-4 rounded-full border border-white/70 shadow-inner"
-                                        style={{ backgroundColor: selectedColor }}
+                        {/* 라벨 */}
+                        {canEdit && (
+                            <div className="mb-4">
+                                <label className={modalLabelClass}>라벨</label>
+                                <div className="max-h-32 overflow-y-auto rounded-2xl border border-white/30 bg-white/30 p-2">
+                                    <LabelSelector
+                                        boardId={boardId}
+                                        cardId={currentCard.id}
+                                        selectedLabelIds={selectedLabelIds}
+                                        onChange={setSelectedLabelIds}
                                     />
-                                    <span>{selectedColorInfo?.label ?? '사용자 정의 색상'}</span>
-                                </div>
-                            }
-                        >
-                            {canEdit && (
-                                <div className="mb-6">
-                                    <label className={`${modalLabelClass} !mb-3`}>라벨</label>
-                                    <div className="max-h-48 overflow-y-auto rounded-2xl border border-white/30 bg-white/30 p-3">
-                                        <LabelSelector
-                                            boardId={boardId}
-                                            cardId={card.id}
-                                            selectedLabelIds={selectedLabelIds}
-                                            onChange={setSelectedLabelIds}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            <div>
-                                <label className={`${modalLabelClass} !mb-3`}>색상 선택</label>
-                                <div className="grid grid-cols-5 gap-3">
-                                    {cardColors.map((color) => (
-                                        <button
-                                            key={color.hex}
-                                            type="button"
-                                            onClick={canEdit ? () => setSelectedColor(color.hex) : undefined}
-                                            style={{ backgroundColor: color.hex }}
-                                            className={`w-full h-12 ${modalColorButtonClass(
-                                                selectedColor === color.hex
-                                            )}`}
-                                            title={color.label}
-                                            disabled={loading || !canEdit}
-                                        />
-                                    ))}
                                 </div>
                             </div>
-                        </CollapsibleSection>
+                        )}
+
+                        {/* 색상 선택 */}
+                        <div className="mb-4">
+                            <label className={modalLabelClass}>색상</label>
+                            <div className="grid grid-cols-5 gap-2">
+                                {cardColors.map((color) => (
+                                    <button
+                                        key={color.hex}
+                                        type="button"
+                                        onClick={canEdit ? () => setSelectedColor(color.hex) : undefined}
+                                        style={{ backgroundColor: color.hex }}
+                                        className={`w-full h-10 ${modalColorButtonClass(
+                                            selectedColor === color.hex
+                                        )}`}
+                                        title={color.label}
+                                        disabled={loading || !canEdit}
+                                    />
+                                ))}
+                            </div>
+                        </div>
 
                         {/* 에러 메시지 */}
                         {error && <div className={`mb-4 ${modalErrorClass}`}>{error}</div>}
+
+                        {/* Spacer to push content to bottom */}
+                        <div className="flex-1"></div>
+
+                        {/* 자식 카드 목록 (항상 표시) */}
+                        <ChildCardList
+                            childCards={currentCard.childCards || []}
+                            onNavigate={handleNavigateToCard}
+                            onCreateChild={() => setShowCreateChildModal(true)}
+                            disabled={isNavigating || !canEdit}
+                        />
 
                         {/* 완료 상태 */}
                         <div className="mb-4">
@@ -462,8 +573,75 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
                             )}
                         </div>
                     </form>
+                        </div>
+
+                        {/* 오른쪽 컬럼: 설명 + 댓글 섹션 */}
+                        <div className="border-l border-gray-200 pl-6 overflow-y-auto" style={{ maxHeight: '80vh' }}>
+                            {/* 설명 */}
+                            <div className="mb-6">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className={modalLabelClass}>설명</label>
+                                    {descriptionSaving && (
+                                        <span className="text-xs text-pastel-blue-500 flex items-center gap-1">
+                                            <div className="h-3 w-3 border-2 border-pastel-blue-400 border-t-transparent rounded-full animate-spin" />
+                                            저장 중...
+                                        </span>
+                                    )}
+                                </div>
+                                <RichTextEditor
+                                    value={description}
+                                    onChange={handleDescriptionChange}
+                                    placeholder="카드에 대한 설명을 입력하세요 (선택사항)"
+                                    readOnly={!canEdit}
+                                    disabled={loading || !canEdit}
+                                    maxLength={50000}
+                                />
+                            </div>
+
+                            {/* 댓글 섹션 */}
+                            {user && (
+                                <CommentSection
+                                    workspaceId={workspaceId}
+                                    boardId={boardId}
+                                    cardId={currentCard.id}
+                                    currentUserId={user.id}
+                                    isOwner={user.id === boardOwnerId}
+                                />
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            {/* 자식 카드 생성 모달 */}
+            {showCreateChildModal && (
+                <CreateCardModal
+                    workspaceId={workspaceId}
+                    boardId={boardId}
+                    columnId={columnId}
+                    parentCardId={currentCard.id}
+                    onClose={() => setShowCreateChildModal(false)}
+                    onSuccess={async (_newCard) => {
+                        setShowCreateChildModal(false);
+                        try {
+                            // 현재 카드를 다시 불러와서 새로 생성된 자식 카드를 포함시킴
+                            const refreshedCard = await cardService.getCard(
+                                workspaceId,
+                                boardId,
+                                columnId,
+                                currentCard.id,
+                                true
+                            );
+                            setCurrentCard(refreshedCard);
+                            // 카드 목록도 새로고침하여 childCount 업데이트
+                            await loadCards(workspaceId, boardId, columnId);
+                        } catch (err) {
+                            console.error('Failed to refresh card after child creation:', err);
+                            setError(err instanceof Error ? err.message : '카드 정보를 새로고침하는데 실패했습니다');
+                        }
+                    }}
+                />
+            )}
 
             {/* 에러 알림 (모달 외부 표시) */}
             {error && <ErrorNotification message={error} onClose={() => setError(null)} duration={5000} />}

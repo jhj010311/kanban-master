@@ -42,6 +42,14 @@
 - Each service method returns typed data (DTOs defined in types/) and throws domain-specific errors that components can handle.
 - Apply consistent error mapping, retry rules, and pagination helpers, and ensure all requests route through the same auth/header configuration.
 
+### Authentication & HTTP Client
+- **CRITICAL**: Never use native fetch() or custom HTTP clients for API calls; always use the shared axiosInstance from @/utils/axios.
+- The axiosInstance is pre-configured with authentication interceptors that automatically inject Authorization Bearer tokens into all requests.
+- Before implementing any new service, examine existing service files (cardService.ts, boardService.ts, userService.ts) to follow the established pattern.
+- Every API call must follow this pattern: `const response = await axiosInstance.get/post/put/delete<ResponseType>(endpoint, options); return response.data;`
+- Missing authentication headers (401 Unauthorized errors) almost always indicate incorrect use of fetch() instead of axiosInstance.
+- The axios configuration handles token refresh, CSRF protection, error normalization, and request/response transformation automatically.
+
 ### Type Definitions
 - Store API contracts, DTOs, and shared interfaces inside types/ and import them everywhere instead of redefining shapes.
 - Prefer exact property names that mirror backend responses; use utility types for partials or derived data, and avoid the any type entirely.
@@ -85,6 +93,7 @@
 - Components follow naming, structure, and typing conventions.
 - Hooks manage loading/error states and clean up side effects.
 - Services centralize network logic and apply consistent error handling.
+- **All API calls use axiosInstance, never native fetch() or custom HTTP clients.**
 - Accessibility, responsiveness, and performance considerations are addressed.
 - Tests cover new behavior, and no stray console logs or unused dependencies remain.
 
